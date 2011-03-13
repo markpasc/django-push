@@ -2,13 +2,15 @@ import datetime
 import feedparser
 import hashlib
 import hmac
+from xml.etree import ElementTree
 
 from django.http import HttpResponse, Http404
 from django.shortcuts import get_object_or_404
+from django.utils.functional import curry, SimpleLazyObject
 from django.views.decorators.csrf import csrf_exempt
 
 from django_push.subscriber.models import Subscription, SubscriptionError
-from django_push.subscriber.signals import updated
+from django_push.subscriber.signals import updated, updated_xml
 
 
 @csrf_exempt
@@ -61,7 +63,8 @@ def callback(request, pk):
             if signature != digest:
                 return HttpResponse('')
 
-        parsed = feedparser.parse(request.raw_post_data)
+        xmltext = request.raw_post_data
+        parsed = feedparser.parse(xmltext)
         if parsed.feed.links:
             hub_url = subscription.hub
             topic_url = subscription.topic
@@ -83,4 +86,5 @@ def callback(request, pk):
                     pass
 
             updated.send(sender=subscription, notification=parsed)
+            updated_xml.send(sender=subscription, notification=ElementTree.fromstring(xmltext))
             return HttpResponse('')
